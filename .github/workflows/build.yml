@@ -33,35 +33,52 @@ jobs:
           pip3 install --user buildozer
           echo "/home/runner/.local/bin" >> $GITHUB_PATH
 
-      - name: Configure Buildozer
+      - name: Configure Buildozer (完全覆盖配置)
         run: |
           echo "=== 阶段 1: 强制初始化 ==="
           rm -f buildozer.spec
           buildozer init -y
-          echo "✅ buildozer.spec 已生成"
+          
+          echo "=== 阶段 2: 完全覆盖Android配置 ==="
+          # 清空原有Android配置部分，重新写入
+          sed -i '/^# Android configuration/,/^# =====/d' buildozer.spec 2>/dev/null || true
+          
+          # 在文件末尾添加我们的完整配置
+          cat >> buildozer.spec << 'EOF'
 
-          echo "=== 阶段 2: 配置Spec文件 ==="
-          sed -i "s|^title = .*|title = 黄金监控|g" buildozer.spec
-          sed -i "s|^package.name = .*|package.name = goldmonitor|g" buildozer.spec
-          sed -i "s|^package.domain = .*|package.domain = org.test|g" buildozer.spec
-          sed -i "s|^source.dir = .*|source.dir = .|g" buildozer.spec
-          sed -i "s|^source.main = .*|source.main = main19.py|g" buildozer.spec
-          sed -i "s|^source.include_exts = .*|source.include_exts = py,png,jpg,kv,atlas,ttc,ttf|g" buildozer.spec
-          sed -i "s|^requirements = .*|requirements = python3,kivy,kivymd,requests|g" buildozer.spec
-          sed -i "s|^android.api = .*|android.api = 33|g" buildozer.spec
-          sed -i "s|^android.minapi = .*|android.minapi = 21|g" buildozer.spec
-          sed -i "s|^android.sdk = .*|android.sdk = 33|g" buildozer.spec
-          sed -i "s|^android.ndk = .*|android.ndk = 25.1.8937393|g" buildozer.spec
-          sed -i "s|^android.permissions = .*|android.permissions = INTERNET,VIBRATE|g" buildozer.spec
-          sed -i "s|^orientation = .*|orientation = portrait|g" buildozer.spec
+# ===== Android配置（完全自定义）=====
+# 应用信息
+title = 黄金监控
+package.name = goldmonitor
+package.domain = org.test
 
+# 源代码
+source.dir = .
+source.main = main19.py
+source.include_exts = py,png,jpg,kv,atlas,ttc,ttf
+
+# 依赖
+requirements = python3,kivy,kivymd,requests
+
+# Android配置
+android.api = 33
+android.minapi = 21
+android.sdk = 33
+android.ndk = 25.1.8937393
+android.build_tools_version = 33.0.2
+android.permissions = INTERNET,VIBRATE
+orientation = portrait
+# ===== 配置结束 =====
+EOF
+          
           echo "=== 阶段 3: 验证配置 ==="
           echo "当前工作目录:"
           pwd
-          echo "spec文件前5行:"
-          head -5 buildozer.spec
+          echo "spec文件中的Android配置:"
+          grep -A 20 "Android配置" buildozer.spec || tail -30 buildozer.spec
+          echo "✅ buildozer.spec 已完全重新配置"
 
-      # --- 新增：安装Android SDK命令行工具 ---
+      # --- 安装Android SDK命令行工具 ---
       - name: Install Android SDK Command Line Tools
         run: |
           echo "=== 安装Android SDK命令行工具 ==="
@@ -88,8 +105,14 @@ jobs:
           echo "=== 准备Android SDK许可证 ==="
           SDK_PATH="$ANDROID_HOME"
           mkdir -p "$SDK_PATH/licenses"
+          
+          # 写入完整的许可证文件（包含36.1.0版本可能需要的许可证）
           echo -e "8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e" > "$SDK_PATH/licenses/android-sdk-license"
           echo -e "84831b9409646a918e30573bab4c9c91346d8abd" > "$SDK_PATH/licenses/android-sdk-preview-license"
+          echo "601085b94cd77f0b54ff86406957099ebe79c4d6" > "$SDK_PATH/licenses/android-googletv-license"
+          echo "33b6a2b64607f11b759f320ef9dff4ae5c47d97a" > "$SDK_PATH/licenses/android-sdk-arm-dbt-license"
+          echo "e9acab5b5fbb560a72cfaecce8946896ff6aab9d" > "$SDK_PATH/licenses/google-gdk-license"
+          
           echo "✅ 许可证文件已创建"
 
       - name: Install Android SDK Components
@@ -97,22 +120,69 @@ jobs:
           echo "=== 安装Android SDK组件 ==="
           SDK_PATH="$ANDROID_HOME"
           
-          # 接受许可证
-          yes | $SDK_PATH/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          # 接受许可证（多种方法确保成功）
+          echo "y" | $SDK_PATH/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
           
-          # 安装组件
+          # 安装Buildozer需要的版本（36.1.0）和我们配置的版本（33.0.2）
+          echo "安装Android SDK组件..."
           $SDK_PATH/cmdline-tools/latest/bin/sdkmanager --install \
             "platforms;android-33" \
+            "build-tools;36.1.0" \
             "build-tools;33.0.2" \
-            "platform-tools"
+            "platform-tools" \
+            "cmdline-tools;latest"
           
           echo "✅ Android SDK组件安装完成"
 
+      # --- 关键步骤：将SDK复制到Buildozer目录 ---
+      - name: Copy Android SDK to Buildozer Directory
+        run: |
+          echo "=== 将Android SDK复制到Buildozer目录 ==="
+          
+          # Buildozer期望的路径
+          BUILDOZER_SDK_DIR="/home/runner/.buildozer/android/platform/android-sdk"
+          
+          # 我们安装的SDK路径
+          OUR_SDK_DIR="$ANDROID_HOME"
+          
+          echo "源路径: $OUR_SDK_DIR"
+          echo "目标路径: $BUILDOZER_SDK_DIR"
+          
+          # 确保目标目录存在
+          mkdir -p "$(dirname "$BUILDOZER_SDK_DIR")"
+          
+          # 如果已存在，先删除（Buildozer会重新初始化）
+          rm -rf "$BUILDOZER_SDK_DIR"
+          
+          # 复制整个SDK目录
+          cp -r "$OUR_SDK_DIR" "$BUILDOZER_SDK_DIR"
+          
+          # 验证复制结果
+          echo "验证SDK目录内容:"
+          ls -la "$BUILDOZER_SDK_DIR/build-tools/" 2>/dev/null | head -5 || echo "build-tools目录尚未创建"
+          
+          echo "✅ Android SDK已复制到Buildozer目录"
+
       - name: Build APK
-        timeout-minutes: 90
+        timeout-minutes: 120
+        env:
+          # 设置环境变量让Buildozer使用正确的SDK
+          ANDROID_HOME: "/home/runner/.buildozer/android/platform/android-sdk"
+          ANDROID_SDK_ROOT: "/home/runner/.buildozer/android/platform/android-sdk"
         run: |
           echo "=== 开始构建APK ==="
-          buildozer -v android debug
+          
+          # 构建前确认环境
+          echo "当前环境变量:"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          
+          echo "Buildozer spec配置摘要:"
+          grep -E "^(android\.|requirements|title)" buildozer.spec
+          
+          echo "开始执行 buildozer android debug..."
+          # 增加详细日志输出
+          buildozer -v android debug 2>&1 | tail -100
 
       - name: Upload APK artifact
         if: success()
