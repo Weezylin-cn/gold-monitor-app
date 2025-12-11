@@ -5,16 +5,16 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    
+
     - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
-    
+
     - name: Install system dependencies
       run: |
         sudo apt-get update
@@ -24,28 +24,86 @@ jobs:
         sudo apt-get install -y libsqlite3-dev libgdbm-dev libdb5.3-dev libbz2-dev
         sudo apt-get install -y libexpat1-dev liblzma-dev zlib1g-dev cython3
         sudo apt-get install -y autoconf automake libtool pkg-config cmake
-    
+      # 增加依赖：expect，用于自动化交互式对话
+        sudo apt-get install -y expect
+
     - name: Install Buildozer
       run: |
         pip3 install --upgrade pip
         pip3 install --user buildozer
         echo "/home/runner/.local/bin" >> $GITHUB_PATH
-    
-    - name: Configure Buildozer
+
+    - name: Configure Buildozer (关键步骤)
       run: |
-        buildozer init
-        echo "title = 黄金监控" >> buildozer.spec
-        echo "package.name = goldmonitor" >> buildozer.spec
-        echo "requirements = python3, kivy, kivymd, requests" >> buildozer.spec
-        echo "android.permissions = INTERNET, VIBRATE" >> buildozer.spec
-        echo "source.main = main19.py" >> buildozer.spec
-        echo "source.include_exts = py,png,jpg,kv,atlas,ttc,ttf" >> buildozer.spec
-    
+        echo "=== 阶段 1: 强制初始化 ==="
+        rm -f buildozer.spec
+        buildozer init -y
+        echo "✅ buildozer.spec 已生成"
+        
+        echo "=== 阶段 2: 配置Spec文件 ==="
+        # 使用sed确保准确修改，避免重复追加
+        sed -i "s|^title = .*|title = 黄金监控|g" buildozer.spec
+        sed -i "s|^package.name = .*|package.name = goldmonitor|g" buildozer.spec
+        sed -i "s|^package.domain = .*|package.domain = org.test|g" buildozer.spec
+        sed -i "s|^source.dir = .*|source.dir = .|g" buildozer.spec
+        sed -i "s|^source.main = .*|source.main = main19.py|g" buildozer.spec
+        sed -i "s|^source.include_exts = .*|source.include_exts = py,png,jpg,kv,atlas,ttc,ttf|g" buildozer.spec
+        sed -i "s|^requirements = .*|requirements = python3,kivy,kivymd,requests|g" buildozer.spec
+        # ！！！ 核心修复：将SDK版本锁定为33，与我们手动安装的一致 ！！！
+        sed -i "s|^android.api = .*|android.api = 33|g" buildozer.spec
+        sed -i "s|^android.minapi = .*|android.minapi = 21|g" buildozer.spec
+        sed -i "s|^android.sdk = .*|android.sdk = 33|g" buildozer.spec
+        sed -i "s|^android.ndk = .*|android.ndk = 25.1.8937393|g" buildozer.spec
+        sed -i "s|^android.permissions = .*|android.permissions = INTERNET,VIBRATE|g" buildozer.spec
+        sed -i "s|^orientation = .*|orientation = portrait|g" buildozer.spec
+        
+        echo "=== 阶段 3: 验证配置 ==="
+        echo "当前工作目录:"
+        pwd
+        echo "生成的 spec 文件前20行:"
+        head -20 buildozer.spec
+        echo "✅ Configure Buildozer 步骤完成"
+
+    # --- 核心修复：使用 expect 脚本100%自动接受SDK许可证 ---
+    - name: Accept Android SDK Licenses with Expect
+      run: |
+        echo "=== 开始使用 Expect 自动处理SDK许可证 ==="
+        # 创建 expect 脚本文件
+        cat > /tmp/accept_licenses.exp << 'EOF'
+#!/usr/bin/expect -f
+set timeout -1
+spawn $env(ANDROID_HOME)/tools/bin/sdkmanager --licenses
+expect {
+    "Accept? (y/N):" { send "y\r"; exp_continue }
+    eof
+}
+EOF
+        chmod +x /tmp/accept_licenses.exp
+        
+        # 设置Android SDK路径 (Buildozer 使用的位置)
+        export ANDROID_HOME="/home/runner/.buildozer/android/platform/android-sdk"
+        export ANDROID_SDK_ROOT="$ANDROID_HOME"
+        echo "SDK路径设置为: $ANDROID_HOME"
+        
+        # 运行 expect 脚本自动回答所有 'y'
+        /tmp/accept_licenses.exp
+        echo "✅ Expect 脚本执行完毕，许可证应已全部接受"
+        
+        # 额外保障：直接安装所需组件，这也会隐式确认许可
+        echo "开始安装 Android SDK 组件..."
+        yes | $ANDROID_HOME/tools/bin/sdkmanager "platforms;android-33" "build-tools;33.0.2" "platform-tools" > /dev/null 2>&1
+        echo "✅ Android SDK 平台和构建工具已安装"
+
     - name: Build APK
-      timeout-minutes: 60
+      timeout-minutes: 90
       run: |
+        echo "=== 开始最终 APK 构建 ==="
+        # 构建前再次确认环境
+        echo "当前目录内容:"
+        ls -la
+        echo "开始执行 buildozer android debug..."
         buildozer -v android debug
-    
+
     - name: Upload APK artifact
       if: success()
       uses: actions/upload-artifact@v4
