@@ -68,33 +68,43 @@ jobs:
     - name: Accept Android SDK Licenses with Expect
       run: |
         echo "=== 开始使用 Expect 自动处理SDK许可证 ==="
-        # 创建 expect 脚本文件
-        cat > /tmp/accept_licenses.exp << 'EOF'
-        # 创建 expect 脚本文件
-        cat > /tmp/accept_licenses.exp << 'EOF'
-        #!/usr/bin/expect -f
-        set timeout -1
-        spawn \$env(ANDROID_HOME)/tools/bin/sdkmanager --licenses
-        expect {
-            "Accept? (y/N):" { send "y\r"; exp_continue }
-            eof
-        }
-        EOF
-        chmod +x /tmp/accept_licenses.exp
-        
         # 设置Android SDK路径 (Buildozer 使用的位置)
         export ANDROID_HOME="/home/runner/.buildozer/android/platform/android-sdk"
         export ANDROID_SDK_ROOT="$ANDROID_HOME"
         echo "SDK路径设置为: $ANDROID_HOME"
         
-        # 运行 expect 脚本自动回答所有 'y'
-        /tmp/accept_licenses.exp
-        echo "✅ Expect 脚本执行完毕，许可证应已全部接受"
+        # 方法1：直接使用expect命令处理许可证
+        echo "方法1: 直接运行expect命令..."
+        /usr/bin/expect << 'SCRIPT_EOF'
+set timeout 60
+spawn $env(ANDROID_HOME)/tools/bin/sdkmanager --licenses
+expect {
+    "Accept? (y/N):" { 
+        send "y\r"
+        exp_continue
+    }
+    timeout {
+        send_user "超时\n"
+        exit 1
+    }
+    eof
+}
+send_user "许可证接受流程完成\n"
+SCRIPT_EOF
         
-        # 额外保障：直接安装所需组件，这也会隐式确认许可
+        echo "✅ Expect 脚本执行完毕"
+        
+        # 方法2：使用非交互式方式安装组件（避免yes命令问题）
         echo "开始安装 Android SDK 组件..."
-        yes | $ANDROID_HOME/tools/bin/sdkmanager "platforms;android-33" "build-tools;33.0.2" "platform-tools" > /dev/null 2>&1
-        echo "✅ Android SDK 平台和构建工具已安装"
+        # 创建响应文件来避免交互
+        mkdir -p "$ANDROID_HOME/licenses"
+        echo -e "8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n" > "$ANDROID_HOME/licenses/android-sdk-license"
+        echo -e "84831b9409646a918e30573bab4c9c91346d8abd\n" > "$ANDROID_HOME/licenses/android-sdk-preview-license"
+        
+        # 使用sdkmanager的非交互模式
+        $ANDROID_HOME/tools/bin/sdkmanager --install "platforms;android-33" "build-tools;33.0.2" "platform-tools" --sdk_root="$ANDROID_HOME" 2>&1 | grep -v "Warning:"
+        
+        echo "✅ Android SDK 平台和构建工具安装尝试完成"
 
     - name: Build APK
       timeout-minutes: 90
