@@ -75,7 +75,7 @@ jobs:
         
         # 方法1：直接使用expect命令处理许可证
         echo "方法1: 直接运行expect命令..."
-        /usr/bin/expect << 'SCRIPT_EOF'
+        /usr/bin/expect <<'SCRIPT_EOF'
 set timeout 60
 spawn $env(ANDROID_HOME)/tools/bin/sdkmanager --licenses
 expect {
