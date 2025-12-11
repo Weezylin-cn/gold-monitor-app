@@ -24,7 +24,7 @@ jobs:
         sudo apt-get install -y libsqlite3-dev libgdbm-dev libdb5.3-dev libbz2-dev
         sudo apt-get install -y libexpat1-dev liblzma-dev zlib1g-dev cython3
         sudo apt-get install -y autoconf automake libtool pkg-config cmake
-      # 增加依赖：expect，用于自动化交互式对话
+        # 增加依赖：expect，用于自动化交互式对话
         sudo apt-get install -y expect
 
     - name: Install Buildozer
