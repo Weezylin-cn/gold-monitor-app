@@ -33,50 +33,59 @@ jobs:
           pip3 install --user buildozer
           echo "/home/runner/.local/bin" >> $GITHUB_PATH
 
-      - name: Configure Buildozer (完全覆盖配置)
+      - name: Configure Buildozer
         run: |
           echo "=== 阶段 1: 强制初始化 ==="
           rm -f buildozer.spec
           buildozer init -y
           
-          echo "=== 阶段 2: 完全覆盖Android配置 ==="
-          # 清空原有Android配置部分，重新写入
-          sed -i '/^# Android configuration/,/^# =====/d' buildozer.spec 2>/dev/null || true
+          echo "=== 阶段 2: 逐行配置buildozer.spec ==="
           
-          # 在文件末尾添加我们的完整配置
-          cat >> buildozer.spec << 'EOF'
-
-# ===== Android配置（完全自定义）=====
-# 应用信息
-title = 黄金监控
-package.name = goldmonitor
-package.domain = org.test
-
-# 源代码
-source.dir = .
-source.main = main19.py
-source.include_exts = py,png,jpg,kv,atlas,ttc,ttf
-
-# 依赖
-requirements = python3,kivy,kivymd,requests
-
-# Android配置
-android.api = 33
-android.minapi = 21
-android.sdk = 33
-android.ndk = 25.1.8937393
-android.build_tools_version = 33.0.2
-android.permissions = INTERNET,VIBRATE
-orientation = portrait
-# ===== 配置结束 =====
-EOF
+          # 备份原始文件
+          cp buildozer.spec buildozer.spec.backup
+          
+          # 创建一个新的spec文件
+          {
+            # 复制原始文件直到Android配置部分
+            sed '/^\[app\]/,/^\[/p;d' buildozer.spec.backup | head -50
+            
+            echo ""
+            echo "# ===== Android配置（自定义）====="
+            echo ""
+            echo "# 应用信息"
+            echo "title = 黄金监控"
+            echo "package.name = goldmonitor"
+            echo "package.domain = org.test"
+            echo ""
+            echo "# 源代码"
+            echo "source.dir = ."
+            echo "source.main = main19.py"
+            echo "source.include_exts = py,png,jpg,kv,atlas,ttc,ttf"
+            echo ""
+            echo "# 依赖"
+            echo "requirements = python3,kivy,kivymd,requests"
+            echo ""
+            echo "# Android配置"
+            echo "android.api = 33"
+            echo "android.minapi = 21"
+            echo "android.sdk = 33"
+            echo "android.ndk = 25.1.8937393"
+            echo "# 注释掉默认的build-tools版本"
+            echo "# android.build_tools_version = "
+            echo "android.permissions = INTERNET,VIBRATE"
+            echo "orientation = portrait"
+            echo ""
+            
+            # 复制原始文件的其余部分
+            sed -n '/^\[buildozer\]/,$p' buildozer.spec.backup
+          } > buildozer.spec
           
           echo "=== 阶段 3: 验证配置 ==="
-          echo "当前工作目录:"
-          pwd
-          echo "spec文件中的Android配置:"
-          grep -A 20 "Android配置" buildozer.spec || tail -30 buildozer.spec
-          echo "✅ buildozer.spec 已完全重新配置"
+          echo "配置完成，显示关键部分:"
+          echo "------------------------"
+          grep -E "^(title|package\.|source\.|requirements|android\.|orientation)" buildozer.spec
+          echo "------------------------"
+          echo "✅ buildozer.spec 配置完成"
 
       # --- 安装Android SDK命令行工具 ---
       - name: Install Android SDK Command Line Tools
@@ -106,7 +115,7 @@ EOF
           SDK_PATH="$ANDROID_HOME"
           mkdir -p "$SDK_PATH/licenses"
           
-          # 写入完整的许可证文件（包含36.1.0版本可能需要的许可证）
+          # 写入完整的许可证文件
           echo -e "8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e" > "$SDK_PATH/licenses/android-sdk-license"
           echo -e "84831b9409646a918e30573bab4c9c91346d8abd" > "$SDK_PATH/licenses/android-sdk-preview-license"
           echo "601085b94cd77f0b54ff86406957099ebe79c4d6" > "$SDK_PATH/licenses/android-googletv-license"
@@ -120,10 +129,10 @@ EOF
           echo "=== 安装Android SDK组件 ==="
           SDK_PATH="$ANDROID_HOME"
           
-          # 接受许可证（多种方法确保成功）
+          # 接受许可证
           echo "y" | $SDK_PATH/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
           
-          # 安装Buildozer需要的版本（36.1.0）和我们配置的版本（33.0.2）
+          # 安装Buildozer需要的版本和我们配置的版本
           echo "安装Android SDK组件..."
           $SDK_PATH/cmdline-tools/latest/bin/sdkmanager --install \
             "platforms;android-33" \
@@ -151,7 +160,7 @@ EOF
           # 确保目标目录存在
           mkdir -p "$(dirname "$BUILDOZER_SDK_DIR")"
           
-          # 如果已存在，先删除（Buildozer会重新初始化）
+          # 如果已存在，先删除
           rm -rf "$BUILDOZER_SDK_DIR"
           
           # 复制整个SDK目录
