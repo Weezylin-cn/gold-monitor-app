@@ -1,0 +1,51 @@
+name: Build Android APK
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y git zip unzip openjdk-17-jdk python3-pip
+        sudo apt-get install -y python3-dev build-essential libffi-dev libssl-dev
+        sudo apt-get install -y libncurses5-dev libncursesw5-dev libreadline-dev
+        sudo apt-get install -y libsqlite3-dev libgdbm-dev libdb5.3-dev libbz2-dev
+        sudo apt-get install -y libexpat1-dev liblzma-dev zlib1g-dev cython3
+        sudo apt-get install -y autoconf automake libtool pkg-config cmake
+    
+    - name: Install Buildozer
+      run: |
+        pip3 install --upgrade pip
+        pip3 install --user buildozer
+        echo "/home/runner/.local/bin" >> $GITHUB_PATH
+    
+    - name: Configure Buildozer
+      run: |
+        buildozer init
+        echo "title = 黄金监控" >> buildozer.spec
+        echo "package.name = goldmonitor" >> buildozer.spec
+        echo "requirements = python3, kivy, kivymd, requests" >> buildozer.spec
+        echo "android.permissions = INTERNET, VIBRATE" >> buildozer.spec
+        echo "source.main = main19.py" >> buildozer.spec
+    
+    - name: Build APK
+      run: |
+        buildozer -v android debug
+    
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: gold-monitor-apk
+        path: bin/*.apk
