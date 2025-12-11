@@ -70,14 +70,16 @@ jobs:
         echo "=== 开始使用 Expect 自动处理SDK许可证 ==="
         # 创建 expect 脚本文件
         cat > /tmp/accept_licenses.exp << 'EOF'
-#!/usr/bin/expect -f
-set timeout -1
-spawn $env(ANDROID_HOME)/tools/bin/sdkmanager --licenses
-expect {
-    "Accept? (y/N):" { send "y\r"; exp_continue }
-    eof
-}
-EOF
+        # 创建 expect 脚本文件
+        cat > /tmp/accept_licenses.exp << 'EOF'
+        #!/usr/bin/expect -f
+        set timeout -1
+        spawn \$env(ANDROID_HOME)/tools/bin/sdkmanager --licenses
+        expect {
+            "Accept? (y/N):" { send "y\r"; exp_continue }
+            eof
+        }
+        EOF
         chmod +x /tmp/accept_licenses.exp
         
         # 设置Android SDK路径 (Buildozer 使用的位置)
