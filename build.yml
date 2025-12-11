@@ -53,15 +53,42 @@ jobs:
 
     - name: Configure Buildozer
       run: |
-        buildozer init
-        echo "title = 黄金监控" >> buildozer.spec
-        echo "package.name = goldmonitor" >> buildozer.spec
-        echo "requirements = python3, kivy, kivymd, requests" >> buildozer.spec
-        echo "android.permissions = INTERNET, VIBRATE" >> buildozer.spec
-        echo "source.main = main19.py" >> buildozer.spec
-        echo "source.include_exts = py,png,jpg,kv,atlas,ttc,ttf" >> buildozer.spec
+        # 1. 强制重新初始化，生成 buildozer.spec
+        echo "正在初始化Buildozer并生成配置文件..."
+        rm -f buildozer.spec
+        buildozer init -y
+        
+        # 2. 验证文件是否生成
+        if [ ! -f "buildozer.spec" ]; then
+          echo "错误：buildozer.spec 文件未能生成！"
+          exit 1
+        fi
+        echo "✅ buildozer.spec 文件已生成"
+        ls -la buildozer.spec
+        
+        # 3. 使用sed命令直接修改spec文件中的关键配置项
+        # 如果你的仓库里没有sed，也可以逐行echo追加，但sed更精准
+        echo "正在配置 buildozer.spec 文件..."
+        sed -i "s|^title = .*|title = 黄金监控|g" buildozer.spec
+        sed -i "s|^package.name = .*|package.name = goldmonitor|g" buildozer.spec
+        sed -i "s|^package.domain = .*|package.domain = org.goldmonitor|g" buildozer.spec
+        sed -i "s|^source.dir = .*|source.dir = .|g" buildozer.spec
+        sed -i "s|^source.main = .*|source.main = main19.py|g" buildozer.spec
+        sed -i "s|^source.include_exts = .*|source.include_exts = py,png,jpg,kv,atlas,ttc,ttf|g" buildozer.spec
+        sed -i "s|^requirements = .*|requirements = python3,kivy,kivymd,requests|g" buildozer.spec
+        sed -i "s|^android.api = .*|android.api = 33|g" buildozer.spec
+        sed -i "s|^android.minapi = .*|android.minapi = 21|g" buildozer.spec
+        sed -i "s|^android.sdk = .*|android.sdk = 33|g" buildozer.spec
+        sed -i "s|^android.ndk = .*|android.ndk = 25.1.8937393|g" buildozer.spec
+        sed -i "s|^android.permissions = .*|android.permissions = INTERNET,VIBRATE|g" buildozer.spec
+        sed -i "s|^orientation = .*|orientation = portrait|g" buildozer.spec
+        
+        # 4. 显示关键配置以验证
+        echo "--- 配置完成，检查关键项 ---"
+        grep -E "^(title|package\.name|package\.domain|source\.main|requirements|android\.api|android\.sdk)" buildozer.spec
+        echo "✅ buildozer.spec 配置完成"
 
-    # --- 核心修复：手动安装并接受SDK许可（替换旧方案）---
+    # --- 核心修复：手动安装并接受SDK许可 ---
     - name: Update Android SDK Tools
       run: |
         # 设置环境变量指向Buildozer的SDK路径
@@ -78,8 +105,7 @@ jobs:
         export ANDROID_HOME="/home/runner/.buildozer/android/platform/android-sdk"
         export ANDROID_SDK_ROOT="$ANDROID_HOME"
         
-        # 安装一个基础的 Android 平台 (例如 API 33) 和对应的构建工具
-        # 这通常会连带解决许可问题
+        # 安装一个基础的 Android 平台 (API 33)
         yes | $ANDROID_HOME/tools/bin/sdkmanager "platforms;android-33" > /dev/null 2>&1
         echo "Base Android platform (API 33) installed."
 
