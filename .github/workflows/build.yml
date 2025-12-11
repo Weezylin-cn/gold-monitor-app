@@ -39,13 +39,17 @@ jobs:
         echo "requirements = python3, kivy, kivymd, requests" >> buildozer.spec
         echo "android.permissions = INTERNET, VIBRATE" >> buildozer.spec
         echo "source.main = main19.py" >> buildozer.spec
+        echo "source.include_exts = py,png,jpg,kv,atlas,ttc,ttf" >> buildozer.spec
     
     - name: Build APK
+      timeout-minutes: 60
       run: |
         buildozer -v android debug
     
     - name: Upload APK artifact
+      if: success()
       uses: actions/upload-artifact@v3
       with:
         name: gold-monitor-apk
         path: bin/*.apk
+        retention-days: 7
