@@ -25,7 +25,7 @@ jobs:
             libsqlite3-dev libgdbm-dev libdb5.3-dev libbz2-dev \
             libexpat1-dev liblzma-dev zlib1g-dev cython3 \
             autoconf automake libtool pkg-config cmake \
-            expect
+            expect wget
 
       - name: Install Buildozer
         run: |
@@ -61,31 +61,50 @@ jobs:
           echo "spec文件前5行:"
           head -5 buildozer.spec
 
-      - name: Prepare Android SDK Licenses (直接写入文件)
+      # --- 新增：安装Android SDK命令行工具 ---
+      - name: Install Android SDK Command Line Tools
+        run: |
+          echo "=== 安装Android SDK命令行工具 ==="
+          
+          SDK_DIR="/home/runner/android-sdk"
+          mkdir -p "$SDK_DIR"
+          
+          cd /tmp
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q commandlinetools-linux-*.zip
+          
+          mkdir -p "$SDK_DIR/cmdline-tools/latest"
+          mv cmdline-tools/* "$SDK_DIR/cmdline-tools/latest/"
+          
+          echo "ANDROID_HOME=$SDK_DIR" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> $GITHUB_ENV
+          echo "PATH=$SDK_DIR/cmdline-tools/latest/bin:$PATH" >> $GITHUB_ENV
+          
+          echo "✅ Android SDK命令行工具安装完成"
+          echo "SDK路径: $SDK_DIR"
+
+      - name: Prepare Android SDK Licenses
         run: |
           echo "=== 准备Android SDK许可证 ==="
-          SDK_PATH="/home/runner/.buildozer/android/platform/android-sdk"
-          
-          # 确保目录存在
+          SDK_PATH="$ANDROID_HOME"
           mkdir -p "$SDK_PATH/licenses"
-          
-          # 写入标准Android SDK许可证
           echo -e "8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e" > "$SDK_PATH/licenses/android-sdk-license"
           echo -e "84831b9409646a918e30573bab4c9c91346d8abd" > "$SDK_PATH/licenses/android-sdk-preview-license"
-          
           echo "✅ 许可证文件已创建"
 
       - name: Install Android SDK Components
         run: |
           echo "=== 安装Android SDK组件 ==="
-          SDK_PATH="/home/runner/.buildozer/android/platform/android-sdk"
+          SDK_PATH="$ANDROID_HOME"
           
-          # 安装基础组件（使用--sdk_root避免交互）
-          $SDK_PATH/tools/bin/sdkmanager --install \
+          # 接受许可证
+          yes | $SDK_PATH/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          
+          # 安装组件
+          $SDK_PATH/cmdline-tools/latest/bin/sdkmanager --install \
             "platforms;android-33" \
             "build-tools;33.0.2" \
-            "platform-tools" \
-            --sdk_root="$SDK_PATH"
+            "platform-tools"
           
           echo "✅ Android SDK组件安装完成"
 
