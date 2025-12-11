@@ -61,38 +61,40 @@ jobs:
         echo "source.main = main19.py" >> buildozer.spec
         echo "source.include_exts = py,png,jpg,kv,atlas,ttc,ttf" >> buildozer.spec
 
-    # --- 关键的许可证修复步骤（修改后）---
-    - name: Accept Android SDK Licenses (FORCE - Buildozer Path)
+    # --- 核心修复：手动安装并接受SDK许可（替换旧方案）---
+    - name: Update Android SDK Tools
       run: |
-        # 找到Buildozer使用的Android SDK路径，并在此路径下创建许可证文件
-        SDK_PATH=$(find ~/.buildozer/android/platform -name "android-sdk" -type d | head -1)
-        if [ -z "$SDK_PATH" ]; then
-          SDK_PATH="/home/runner/.buildozer/android/platform/android-sdk"
-        fi
-        echo "Target SDK path: $SDK_PATH"
+        # 设置环境变量指向Buildozer的SDK路径
+        export ANDROID_HOME="/home/runner/.buildozer/android/platform/android-sdk"
+        export ANDROID_SDK_ROOT="$ANDROID_HOME"
+        echo "Android SDK Home: $ANDROID_HOME"
+        
+        # 首先，非交互式地更新SDK工具本身
+        yes | $ANDROID_HOME/tools/bin/sdkmanager --update --channel=0 > /dev/null 2>&1
+        echo "SDK tools updated."
 
-        # 创建许可证目录
-        mkdir -p "$SDK_PATH/licenses"
+    - name: Install Base Android SDK Platform
+      run: |
+        export ANDROID_HOME="/home/runner/.buildozer/android/platform/android-sdk"
+        export ANDROID_SDK_ROOT="$ANDROID_HOME"
+        
+        # 安装一个基础的 Android 平台 (例如 API 33) 和对应的构建工具
+        # 这通常会连带解决许可问题
+        yes | $ANDROID_HOME/tools/bin/sdkmanager "platforms;android-33" > /dev/null 2>&1
+        echo "Base Android platform (API 33) installed."
 
-        # 写入强力许可证接受文件
-        echo -e "8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e" > "$SDK_PATH/licenses/android-sdk-license"
-        echo -e "84831b9409646a918e30573bab4c9c91346d8abd\nd975f751698a77b662f1254ddbeed3901e976f5a" > "$SDK_PATH/licenses/android-sdk-preview-license"
-        echo "601085b94cd77f0b54ff86406957099ebe79c4d6" > "$SDK_PATH/licenses/android-googletv-license"
-        echo "33b6a2b64607f11b759f320ef9dff4ae5c47d97a" > "$SDK_PATH/licenses/android-sdk-arm-dbt-license"
-        echo "e9acab5b5fbb560a72cfaecce8946896ff6aab9d" > "$SDK_PATH/licenses/google-gdk-license"
-
-        echo "Android SDK licenses have been written directly to Buildozer's SDK path."
-
-    # --- 可选的终极后备方案（如果上面的方案仍失败，请启用）---
-    # - name: Install Android SDK Components Manually (Fallback)
-    #   run: |
-    #     # 确保SDK管理器可用
-    #     yes | $ANDROID_SDK_ROOT/tools/bin/sdkmanager --update
-    #     # 安装一个通用的平台和构建工具（例如 API 33）
-    #     yes | $ANDROID_SDK_ROOT/tools/bin/sdkmanager "platforms;android-33" "build-tools;33.0.2" "platform-tools"
-    #     # 尝试再次接受所有许可
-    #     yes | $ANDROID_SDK_ROOT/tools/bin/sdkmanager --licenses || true
-    #     echo "Common Android SDK components installed as fallback."
+    - name: Install Specific Build-Tools and Accept Licenses
+      run: |
+        export ANDROID_HOME="/home/runner/.buildozer/android/platform/android-sdk"
+        export ANDROID_SDK_ROOT="$ANDROID_HOME"
+        
+        # 尝试安装一个通用的构建工具版本 (例如 33.0.2)，并强制接受许可
+        # 使用 `sdkmanager --licenses` 并配合 `yes` 命令尝试一次性接受所有
+        echo "y" | $ANDROID_HOME/tools/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+        
+        # 然后安装构建工具
+        yes | $ANDROID_HOME/tools/bin/sdkmanager "build-tools;33.0.2" > /dev/null 2>&1
+        echo "Android SDK Build-Tools 33.0.2 installed (licenses forced accepted)."
 
     - name: Build APK
       timeout-minutes: 60
