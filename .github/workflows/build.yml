@@ -68,13 +68,14 @@ jobs:
     - name: Accept Android SDK Licenses with Expect
       run: |
         echo "=== 开始使用 Expect 自动处理SDK许可证 ==="
-        # 设置Android SDK路径 (Buildozer 使用的位置)
+        
+        # 设置Android SDK路径
         export ANDROID_HOME="/home/runner/.buildozer/android/platform/android-sdk"
         export ANDROID_SDK_ROOT="$ANDROID_HOME"
         echo "SDK路径设置为: $ANDROID_HOME"
         
-        # 创建 expect 脚本内容（使用变量存储，避免多行嵌套）
-        EXPECT_SCRIPT=$(cat << 'EXPECT_EOF'
+        # 创建一个简单的expect脚本文件
+        cat > /tmp/accept_licenses.exp << 'EOF'
 #!/usr/bin/expect -f
 set timeout 60
 spawn $env(ANDROID_HOME)/tools/bin/sdkmanager --licenses
@@ -90,15 +91,12 @@ expect {
     eof
 }
 send_user "许可证接受流程完成\n"
-EXPECT_EOF
-        )
+EOF
         
-        # 将脚本写入文件
-        echo "$EXPECT_SCRIPT" > /tmp/accept_licenses.exp
         chmod +x /tmp/accept_licenses.exp
         echo "✅ Expect 脚本文件创建完成"
         
-        # 运行 expect 脚本
+        # 运行expect脚本
         echo "运行 Expect 脚本..."
         /usr/bin/expect /tmp/accept_licenses.exp
         
@@ -107,10 +105,10 @@ EXPECT_EOF
         # 安装Android SDK组件
         echo "开始安装 Android SDK 组件..."
         mkdir -p "$ANDROID_HOME/licenses"
-        echo -e "8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n" > "$ANDROID_HOME/licenses/android-sdk-license"
-        echo -e "84831b9409646a918e30573bab4c9c91346d8abd\n" > "$ANDROID_HOME/licenses/android-sdk-preview-license"
+        echo -e "8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e" > "$ANDROID_HOME/licenses/android-sdk-license"
+        echo -e "84831b9409646a918e30573bab4c9c91346d8abd" > "$ANDROID_HOME/licenses/android-sdk-preview-license"
         
-        $ANDROID_HOME/tools/bin/sdkmanager --install "platforms;android-33" "build-tools;33.0.2" "platform-tools" --sdk_root="$ANDROID_HOME" 2>&1 | grep -v "Warning:"
+        $ANDROID_HOME/tools/bin/sdkmanager --install "platforms;android-33" "build-tools;33.0.2" "platform-tools" --sdk_root="$ANDROID_HOME" 2>&1
         
         echo "✅ Android SDK 平台和构建工具安装尝试完成"
 
