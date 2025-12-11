@@ -51,12 +51,11 @@ jobs:
         pip3 install --user buildozer
         echo "/home/runner/.local/bin" >> $GITHUB_PATH
     
-    # 关键修复：预先接受Android SDK许可证
     - name: Accept Android SDK Licenses
       run: |
-        yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses 2>/dev/null || true
+        yes | $ANDROID_SDK_ROOT/tools/bin/sdkmanager --licenses > /dev/null 2>&1
         echo "Android SDK licenses accepted."
-    
+
     - name: Configure Buildozer
       run: |
         buildozer init
