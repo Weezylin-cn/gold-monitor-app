@@ -51,6 +51,8 @@ jobs:
           echo "title = 黄金监控" >> buildozer.spec
           echo "package.name = goldmonitor" >> buildozer.spec
           echo "package.domain = org.test" >> buildozer.spec
+          # 添加必需的version配置
+          echo "version = 1.0.0" >> buildozer.spec
           echo "" >> buildozer.spec
           echo "# ===== 源代码配置 =====" >> buildozer.spec
           echo "source.dir = ." >> buildozer.spec
@@ -81,7 +83,7 @@ jobs:
           echo "------------------------"
           echo "检查是否有重复项:"
           # 检查每个选项是否只出现一次
-          for option in title package.name package.domain source.dir source.main requirements android.api android.sdk; do
+          for option in title version package.name package.domain source.dir source.main requirements android.api android.sdk; do
             count=$(grep -c "^$option = " buildozer.spec)
             if [ "$count" -gt 1 ]; then
               echo "❌ $option 出现了 $count 次（应该只出现1次）"
@@ -199,7 +201,7 @@ jobs:
           
           # 2. 显示buildozer配置
           echo "2. buildozer.spec 关键配置:"
-          grep -E "^(title|package\.|source\.|requirements|android\.)" buildozer.spec || echo "   无法读取配置"
+          grep -E "^(title|version|package\.|source\.|requirements|android\.)" buildozer.spec || echo "   无法读取配置"
           
           # 3. 检查Android SDK
           echo "3. Android SDK 检查:"
