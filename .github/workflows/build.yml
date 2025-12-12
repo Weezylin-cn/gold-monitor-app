@@ -149,6 +149,58 @@ jobs:
           
           echo "✅ Android SDK组件安装完成"
 
+      # --- 预下载Android NDK（使用镜像源）---
+      - name: Pre-download Android NDK with Mirror
+        timeout-minutes: 30
+        run: |
+          echo "=== 预下载Android NDK（使用镜像源）==="
+          
+          # 设置NDK路径
+          NDK_DIR="/home/runner/.buildozer/android/platform"
+          NDK_VERSION="r25.1.8937393"
+          
+          # 创建目录
+          mkdir -p "$NDK_DIR"
+          cd "$NDK_DIR"
+          
+          # 尝试多个镜像源
+          MIRRORS=(
+            "https://dl.google.com/android/repository/android-ndk-${NDK_VERSION}-linux.zip"
+            "https://mirrors.cloud.tencent.com/Android/repository/android-ndk-${NDK_VERSION}-linux.zip"
+            "https://mirrors.aliyun.com/Android/repository/android-ndk-${NDK_VERSION}-linux.zip"
+          )
+          
+          echo "尝试下载Android NDK ${NDK_VERSION} (约1.5GB)..."
+          
+          for MIRROR_URL in "${MIRRORS[@]}"; do
+            echo "尝试镜像: $MIRROR_URL"
+            
+            # 使用wget，支持断点续传和超时设置
+            if wget -c --tries=3 --timeout=60 --read-timeout=60 "$MIRROR_URL"; then
+              echo "✅ NDK下载成功"
+              
+              # 解压NDK
+              echo "解压NDK..."
+              unzip -q "android-ndk-${NDK_VERSION}-linux.zip" || {
+                echo "解压失败，但文件可能已损坏，Buildozer会重新下载"
+                rm -f "android-ndk-${NDK_VERSION}-linux.zip"
+                continue
+              }
+              
+              # 验证NDK目录
+              if [ -d "android-ndk-${NDK_VERSION}" ]; then
+                echo "✅ NDK安装完成"
+                echo "NDK路径: $NDK_DIR/android-ndk-${NDK_VERSION}"
+                exit 0
+              fi
+            else
+              echo "❌ 镜像下载失败，尝试下一个"
+              rm -f "android-ndk-${NDK_VERSION}-linux.zip" 2>/dev/null || true
+            fi
+          done
+          
+          echo "⚠️ 所有镜像下载失败，Buildozer将尝试从原始源下载"
+
       # --- 关键步骤：将SDK复制到Buildozer目录 ---
       - name: Copy Android SDK to Buildozer Directory
         run: |
@@ -180,7 +232,7 @@ jobs:
 
       # --- Build APK 步骤（带详细调试）---
       - name: Build APK (带详细调试)
-        timeout-minutes: 180  # 增加到180分钟
+        timeout-minutes: 180
         env:
           ANDROID_HOME: "/home/runner/.buildozer/android/platform/android-sdk"
           ANDROID_SDK_ROOT: "/home/runner/.buildozer/android/platform/android-sdk"
