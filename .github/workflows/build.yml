@@ -66,7 +66,8 @@ jobs:
           echo "android.api = 33" >> buildozer.spec
           echo "android.minapi = 21" >> buildozer.spec
           echo "android.sdk = 33" >> buildozer.spec
-          echo "android.ndk = 25.1.8937393" >> buildozer.spec
+          # 使用更小、更容易下载的NDK版本
+          echo "android.ndk = 23.1.7779620" >> buildozer.spec
           echo "android.permissions = INTERNET,VIBRATE" >> buildozer.spec
           echo "orientation = portrait" >> buildozer.spec
           echo "" >> buildozer.spec
@@ -75,23 +76,6 @@ jobs:
           echo "# ===== Buildozer配置 =====" >> buildozer.spec
           echo "log_level = 2" >> buildozer.spec
           echo "warn_on_root = 1" >> buildozer.spec
-          
-          echo "=== 阶段 3: 验证配置 ==="
-          echo "新创建的buildozer.spec文件前30行:"
-          echo "------------------------"
-          head -30 buildozer.spec
-          echo "------------------------"
-          echo "检查是否有重复项:"
-          # 检查每个选项是否只出现一次
-          for option in title version package.name package.domain source.dir source.main requirements android.api android.sdk; do
-            count=$(grep -c "^$option = " buildozer.spec)
-            if [ "$count" -gt 1 ]; then
-              echo "❌ $option 出现了 $count 次（应该只出现1次）"
-            else
-              echo "✅ $option 出现 $count 次"
-            fi
-          done
-          echo "✅ buildozer.spec 配置完成（无重复项）"
 
       # --- 安装Android SDK命令行工具 ---
       - name: Install Android SDK Command Line Tools
