@@ -66,8 +66,8 @@ jobs:
           echo "android.api = 33" >> buildozer.spec
           echo "android.minapi = 21" >> buildozer.spec
           echo "android.sdk = 33" >> buildozer.spec
-          # 使用更小、更容易下载的NDK版本
-          echo "android.ndk = 23.1.7779620" >> buildozer.spec
+          # 使用Buildozer推荐的NDK版本
+          echo "android.ndk = 25.1.8937393" >> buildozer.spec  # 25b版本
           echo "android.permissions = INTERNET,VIBRATE" >> buildozer.spec
           echo "orientation = portrait" >> buildozer.spec
           echo "" >> buildozer.spec
@@ -76,6 +76,23 @@ jobs:
           echo "# ===== Buildozer配置 =====" >> buildozer.spec
           echo "log_level = 2" >> buildozer.spec
           echo "warn_on_root = 1" >> buildozer.spec
+          
+          echo "=== 阶段 3: 验证配置 ==="
+          echo "新创建的buildozer.spec文件前30行:"
+          echo "------------------------"
+          head -30 buildozer.spec
+          echo "------------------------"
+          echo "检查是否有重复项:"
+          # 检查每个选项是否只出现一次
+          for option in title version package.name package.domain source.dir source.main requirements android.api android.sdk android.ndk; do
+            count=$(grep -c "^$option = " buildozer.spec)
+            if [ "$count" -gt 1 ]; then
+              echo "❌ $option 出现了 $count 次（应该只出现1次）"
+            else
+              echo "✅ $option 出现 $count 次"
+            fi
+          done
+          echo "✅ buildozer.spec 配置完成（无重复项）"
 
       # --- 安装Android SDK命令行工具 ---
       - name: Install Android SDK Command Line Tools
@@ -133,91 +150,80 @@ jobs:
           
           echo "✅ Android SDK组件安装完成"
 
-      # --- 强制预下载Android NDK（修复版）---
-      - name: Download Android NDK (Fixed)
+      # --- 强制预下载Android NDK（多版本尝试）---
+      - name: Download Android NDK (多版本尝试)
         timeout-minutes: 60
         run: |
-          echo "=== 强制下载Android NDK（修复版）==="
+          echo "=== 强制下载Android NDK（多版本尝试）==="
           
           # 设置NDK路径
           NDK_DIR="/home/runner/.buildozer/android/platform"
-          NDK_VERSION="r23.1.7779620"
-          NDK_FILE="android-ndk-${NDK_VERSION}-linux.zip"
           
           # 创建目录
           mkdir -p "$NDK_DIR"
           cd "$NDK_DIR"
           
           echo "当前目录: $(pwd)"
-          echo "检查现有文件:"
-          ls -la *.zip 2>/dev/null || echo "无zip文件"
+          echo "检查现有NDK:"
+          find . -name "android-ndk-*" -type d 2>/dev/null | head -5 || echo "无NDK目录"
           
-          # 检查是否已存在NDK目录
-          if [ -d "android-ndk-${NDK_VERSION}" ]; then
-            echo "✅ NDK已存在: android-ndk-${NDK_VERSION}"
+          # 检查是否已存在任何NDK版本
+          if find . -name "android-ndk-*" -type d | grep -q .; then
+            echo "✅ 已有NDK目录存在"
+            echo "现有NDK目录:"
+            find . -name "android-ndk-*" -type d
             echo "跳过下载"
             exit 0
           fi
           
-          echo "下载Android NDK ${NDK_VERSION}..."
-          echo "注意：NDK约1.2GB，下载需要时间..."
+          echo "尝试下载Android NDK..."
+          echo "注意：NDK约1.5GB，下载需要时间..."
           
-          # 方法1：使用官方推荐的下载方式
-          echo "方法1: 使用wget下载（支持断点续传）..."
+          # 尝试多个可能的NDK版本
+          # Google的NDK版本命名有时不一致
+          POSSIBLE_VERSIONS=(
+            "r25b"
+            "r25.1.8937393"
+            "r25"
+            "r24"
+            "r23c"
+          )
           
-          # Google NDK的直接下载链接（需要正确构造）
-          # 注意：可能需要接受许可证
-          NDK_URL="https://dl.google.com/android/repository/${NDK_FILE}"
-          
-          # 添加重试机制和详细的错误信息
-          echo "下载URL: $NDK_URL"
-          echo "开始下载（这可能需要5-15分钟）..."
-          
-          # 使用wget下载，显示进度
-          if wget -c --tries=5 --timeout=300 --show-progress \
-               --header="Accept: */*" \
-               --header="Accept-Language: en-US,en;q=0.9" \
-               --header="User-Agent: Mozilla/5.0" \
-               "$NDK_URL"; then
+          for VERSION in "${POSSIBLE_VERSIONS[@]}"; do
+            NDK_FILE="android-ndk-${VERSION}-linux.zip"
+            NDK_URL="https://dl.google.com/android/repository/${NDK_FILE}"
+            
+            echo "尝试版本: $VERSION"
+            echo "URL: $NDK_URL"
+            
+            # 尝试下载
+            if wget -c --tries=2 --timeout=120 --show-progress "$NDK_URL" 2>&1 | tail -5; then
+              echo "✅ 下载成功: $VERSION"
               
-              echo "✅ 下载完成，验证文件大小..."
+              # 验证文件大小
               FILE_SIZE=$(stat -c%s "$NDK_FILE" 2>/dev/null || echo "0")
               echo "文件大小: $FILE_SIZE 字节"
               
-              # NDK文件应该大于1GB
               if [ "$FILE_SIZE" -gt 1000000000 ]; then
-                  echo "文件大小正常，开始解压..."
-                  
-                  # 解压NDK
-                  unzip -q "$NDK_FILE" || {
-                      echo "❌ 解压失败"
-                      echo "尝试修复zip文件..."
-                      # 尝试修复zip文件
-                      unzip -q "$NDK_FILE" 2>&1 | head -20
-                      exit 1
-                  }
-                  
-                  if [ -d "android-ndk-${NDK_VERSION}" ]; then
-                      echo "✅ NDK安装完成"
-                      echo "NDK路径: $(pwd)/android-ndk-${NDK_VERSION}"
-                      echo "目录大小:"
-                      du -sh "android-ndk-${NDK_VERSION}"
-                  else
-                      echo "❌ NDK目录未创建"
-                      echo "当前目录内容:"
-                      ls -la
-                  fi
+                echo "文件大小正常，解压..."
+                unzip -q "$NDK_FILE" && {
+                  echo "✅ NDK解压成功"
+                  echo "NDK目录:"
+                  find . -name "android-ndk-*" -type d
+                  exit 0
+                } || echo "❌ 解压失败"
               else
-                  echo "❌ 文件大小异常（太小），可能是下载错误"
-                  echo "删除损坏的文件..."
-                  rm -f "$NDK_FILE"
-                  echo "将依赖Buildozer自行下载"
+                echo "❌ 文件太小，删除..."
+                rm -f "$NDK_FILE"
               fi
-          else
-              echo "❌ wget下载失败"
-              echo "将依赖Buildozer自行下载"
-          fi
+            else
+              echo "❌ 版本 $VERSION 不可用"
+              rm -f "$NDK_FILE" 2>/dev/null || true
+            fi
+          done
           
+          echo "⚠️ 所有NDK版本尝试失败"
+          echo "Buildozer将尝试自行下载"
           echo "NDK下载步骤完成"
 
       # --- 关键步骤：将SDK复制到Buildozer目录 ---
@@ -249,9 +255,9 @@ jobs:
           
           echo "✅ Android SDK已复制到Buildozer目录"
 
-      # --- Build APK 步骤（带详细调试）---
-      - name: Build APK (带详细调试)
-        timeout-minutes: 180
+      # --- Build APK 步骤（带详细调试和NDK检查）---
+      - name: Build APK (带详细调试和NDK检查)
+        timeout-minutes: 240  # 增加到240分钟
         env:
           ANDROID_HOME: "/home/runner/.buildozer/android/platform/android-sdk"
           ANDROID_SDK_ROOT: "/home/runner/.buildozer/android/platform/android-sdk"
@@ -281,12 +287,22 @@ jobs:
           echo "   ANDROID_HOME: $ANDROID_HOME"
           ls -la "$ANDROID_HOME/build-tools/" 2>/dev/null | head -5 || echo "   ❌ build-tools目录不存在"
           
+          # 3.5 检查Android NDK
+          echo "3.5 Android NDK 检查:"
+          echo "   检查NDK目录是否存在..."
+          NDK_PATH="/home/runner/.buildozer/android/platform"
+          echo "   NDK根目录: $NDK_PATH"
+          echo "   目录内容:"
+          ls -la "$NDK_PATH/" 2>/dev/null | head -10 || echo "   无法访问NDK目录"
+          echo "   查找android-ndk-*目录:"
+          find "$NDK_PATH" -name "android-ndk-*" -type d 2>/dev/null | head -5 || echo "   未找到NDK目录"
+          
           # 4. 运行buildozer并捕获所有输出
           echo "4. 开始执行 buildozer..."
           echo "================================"
           
           # 尝试多次构建（如果NDK下载失败会自动重试）
-          MAX_RETRIES=3
+          MAX_RETRIES=5  # 增加到5次
           for i in $(seq 1 $MAX_RETRIES); do
             echo "尝试第 $i/$MAX_RETRIES 次构建..."
             
@@ -297,9 +313,9 @@ jobs:
             if [ $BUILD_STATUS -eq 0 ]; then
               echo "✅ 构建成功！"
               break
-            elif grep -q "read of closed file\|ValueError" buildozer_output.log; then
-              echo "⚠️ NDK下载中断，等待30秒后重试..."
-              sleep 30
+            elif grep -q "read of closed file\|ValueError\|404\|Not Found" buildozer_output.log; then
+              echo "⚠️ NDK下载问题，等待60秒后重试..."
+              sleep 60
             else
               echo "❌ 其他错误，不再重试"
               break
@@ -321,7 +337,7 @@ jobs:
           # 8. 如果有错误，显示错误部分
           if [ $BUILD_STATUS -ne 0 ]; then
             echo "8. 构建失败，错误信息:"
-            grep -A 5 -B 5 -i "error\|fail\|exception\|traceback\|closed" buildozer_output.log 2>/dev/null | head -30 || echo "   未找到明显错误信息"
+            grep -A 5 -B 5 -i "error\|fail\|exception\|traceback\|closed\|404\|Not Found" buildozer_output.log 2>/dev/null | head -30 || echo "   未找到明显错误信息"
           fi
           
           # 9. 根据退出码决定是否失败
