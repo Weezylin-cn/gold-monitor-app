@@ -33,59 +33,66 @@ jobs:
           pip3 install --user buildozer
           echo "/home/runner/.local/bin" >> $GITHUB_PATH
 
-      - name: Configure Buildozer
+      - name: Configure Buildozer (修复重复配置问题)
         run: |
           echo "=== 阶段 1: 强制初始化 ==="
           rm -f buildozer.spec
           buildozer init -y
           
-          echo "=== 阶段 2: 逐行配置buildozer.spec ==="
+          echo "=== 阶段 2: 清理并重建spec文件 ==="
           
-          # 备份原始文件
-          cp buildozer.spec buildozer.spec.backup
+          # 方法：完全重新创建spec文件，而不是追加
+          # 1. 先获取原始spec的基本结构
+          echo "创建新的buildozer.spec文件..."
           
-          # 创建一个新的spec文件
-          {
-            # 复制原始文件直到Android配置部分
-            sed '/^\[app\]/,/^\[/p;d' buildozer.spec.backup | head -50
-            
-            echo ""
-            echo "# ===== Android配置（自定义）====="
-            echo ""
-            echo "# 应用信息"
-            echo "title = 黄金监控"
-            echo "package.name = goldmonitor"
-            echo "package.domain = org.test"
-            echo ""
-            echo "# 源代码"
-            echo "source.dir = ."
-            echo "source.main = main19.py"
-            echo "source.include_exts = py,png,jpg,kv,atlas,ttc,ttf"
-            echo ""
-            echo "# 依赖"
-            echo "requirements = python3,kivy,kivymd,requests"
-            echo ""
-            echo "# Android配置"
-            echo "android.api = 33"
-            echo "android.minapi = 21"
-            echo "android.sdk = 33"
-            echo "android.ndk = 25.1.8937393"
-            echo "# 注释掉默认的build-tools版本"
-            echo "# android.build_tools_version = "
-            echo "android.permissions = INTERNET,VIBRATE"
-            echo "orientation = portrait"
-            echo ""
-            
-            # 复制原始文件的其余部分
-            sed -n '/^\[buildozer\]/,$p' buildozer.spec.backup
-          } > buildozer.spec
+          # 创建全新的spec文件
+          cat > buildozer.spec << 'EOF'
+[app]
+
+# ===== 应用信息 =====
+title = 黄金监控
+package.name = goldmonitor
+package.domain = org.test
+
+# ===== 源代码配置 =====
+source.dir = .
+source.main = main19.py
+source.include_exts = py,png,jpg,kv,atlas,ttc,ttf
+
+# ===== 需求/依赖 =====
+requirements = python3,kivy,kivymd,requests
+
+# ===== Android配置 =====
+android.api = 33
+android.minapi = 21
+android.sdk = 33
+android.ndk = 25.1.8937393
+android.permissions = INTERNET,VIBRATE
+orientation = portrait
+
+[buildozer]
+
+# ===== Buildozer配置 =====
+log_level = 2
+warn_on_root = 1
+EOF
           
           echo "=== 阶段 3: 验证配置 ==="
-          echo "配置完成，显示关键部分:"
+          echo "新创建的buildozer.spec文件:"
           echo "------------------------"
-          grep -E "^(title|package\.|source\.|requirements|android\.|orientation)" buildozer.spec
+          cat buildozer.spec
           echo "------------------------"
-          echo "✅ buildozer.spec 配置完成"
+          echo "检查是否有重复项:"
+          # 检查每个选项是否只出现一次
+          for option in title package.name package.domain source.dir source.main requirements android.api android.sdk; do
+            count=$(grep -c "^$option = " buildozer.spec)
+            if [ "$count" -gt 1 ]; then
+              echo "❌ $option 出现了 $count 次（应该只出现1次）"
+            else
+              echo "✅ $option 出现 $count 次"
+            fi
+          done
+          echo "✅ buildozer.spec 配置完成（无重复项）"
 
       # --- 安装Android SDK命令行工具 ---
       - name: Install Android SDK Command Line Tools
@@ -172,7 +179,7 @@ jobs:
           
           echo "✅ Android SDK已复制到Buildozer目录"
 
-      # --- 修改后的 Build APK 步骤（带详细调试）---
+      # --- Build APK 步骤（带详细调试）---
       - name: Build APK (带详细调试)
         timeout-minutes: 120
         env:
