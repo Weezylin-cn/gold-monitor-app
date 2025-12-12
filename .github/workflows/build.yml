@@ -133,64 +133,89 @@ jobs:
           
           echo "✅ Android SDK组件安装完成"
 
-      # --- 预下载Android NDK（使用镜像源）---
-      # --- 强制预下载Android NDK ---
-      - name: Download Android NDK
-        timeout-minutes: 45
+      # --- 强制预下载Android NDK（修复版）---
+      - name: Download Android NDK (Fixed)
+        timeout-minutes: 60
         run: |
-          echo "=== 强制下载Android NDK ==="
+          echo "=== 强制下载Android NDK（修复版）==="
           
           # 设置NDK路径
           NDK_DIR="/home/runner/.buildozer/android/platform"
           NDK_VERSION="r23.1.7779620"
           NDK_FILE="android-ndk-${NDK_VERSION}-linux.zip"
-          NDK_URL="https://dl.google.com/android/repository/${NDK_FILE}"
           
           # 创建目录
           mkdir -p "$NDK_DIR"
           cd "$NDK_DIR"
           
           echo "当前目录: $(pwd)"
-          echo "目录内容:"
-          ls -la
+          echo "检查现有文件:"
+          ls -la *.zip 2>/dev/null || echo "无zip文件"
           
-          # 检查是否已存在NDK
+          # 检查是否已存在NDK目录
           if [ -d "android-ndk-${NDK_VERSION}" ]; then
             echo "✅ NDK已存在: android-ndk-${NDK_VERSION}"
+            echo "跳过下载"
             exit 0
           fi
           
           echo "下载Android NDK ${NDK_VERSION}..."
-          echo "URL: $NDK_URL"
+          echo "注意：NDK约1.2GB，下载需要时间..."
           
-          # 方法1: 使用curl（更稳定）
-          echo "尝试curl下载..."
-          if curl -L -C - -o "$NDK_FILE" "$NDK_URL"; then
-            echo "✅ curl下载成功"
+          # 方法1：使用官方推荐的下载方式
+          echo "方法1: 使用wget下载（支持断点续传）..."
+          
+          # Google NDK的直接下载链接（需要正确构造）
+          # 注意：可能需要接受许可证
+          NDK_URL="https://dl.google.com/android/repository/${NDK_FILE}"
+          
+          # 添加重试机制和详细的错误信息
+          echo "下载URL: $NDK_URL"
+          echo "开始下载（这可能需要5-15分钟）..."
+          
+          # 使用wget下载，显示进度
+          if wget -c --tries=5 --timeout=300 --show-progress \
+               --header="Accept: */*" \
+               --header="Accept-Language: en-US,en;q=0.9" \
+               --header="User-Agent: Mozilla/5.0" \
+               "$NDK_URL"; then
+              
+              echo "✅ 下载完成，验证文件大小..."
+              FILE_SIZE=$(stat -c%s "$NDK_FILE" 2>/dev/null || echo "0")
+              echo "文件大小: $FILE_SIZE 字节"
+              
+              # NDK文件应该大于1GB
+              if [ "$FILE_SIZE" -gt 1000000000 ]; then
+                  echo "文件大小正常，开始解压..."
+                  
+                  # 解压NDK
+                  unzip -q "$NDK_FILE" || {
+                      echo "❌ 解压失败"
+                      echo "尝试修复zip文件..."
+                      # 尝试修复zip文件
+                      unzip -q "$NDK_FILE" 2>&1 | head -20
+                      exit 1
+                  }
+                  
+                  if [ -d "android-ndk-${NDK_VERSION}" ]; then
+                      echo "✅ NDK安装完成"
+                      echo "NDK路径: $(pwd)/android-ndk-${NDK_VERSION}"
+                      echo "目录大小:"
+                      du -sh "android-ndk-${NDK_VERSION}"
+                  else
+                      echo "❌ NDK目录未创建"
+                      echo "当前目录内容:"
+                      ls -la
+                  fi
+              else
+                  echo "❌ 文件大小异常（太小），可能是下载错误"
+                  echo "删除损坏的文件..."
+                  rm -f "$NDK_FILE"
+                  echo "将依赖Buildozer自行下载"
+              fi
           else
-            echo "❌ curl下载失败，尝试wget..."
-            # 方法2: 使用wget
-            wget -c --tries=5 --timeout=120 "$NDK_URL" || {
-              echo "❌ wget也失败"
+              echo "❌ wget下载失败"
               echo "将依赖Buildozer自行下载"
-              exit 0  # 不失败，让构建继续
-            }
-          fi
-          
-          # 解压NDK
-          if [ -f "$NDK_FILE" ]; then
-            echo "解压NDK..."
-            unzip -q "$NDK_FILE" || {
-              echo "⚠️ 解压失败，文件可能损坏"
-              rm -f "$NDK_FILE"
-            }
-            
-            if [ -d "android-ndk-${NDK_VERSION}" ]; then
-              echo "✅ NDK安装完成"
-              echo "NDK路径: $(pwd)/android-ndk-${NDK_VERSION}"
-            else
-              echo "⚠️ NDK目录未创建"
-            fi
           fi
           
           echo "NDK下载步骤完成"
