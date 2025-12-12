@@ -7,127 +7,239 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y git zip unzip openjdk-17-jdk python3-pip
-        sudo apt-get install -y python3-dev build-essential libffi-dev libssl-dev
-        sudo apt-get install -y libncurses5-dev libncursesw5-dev libreadline-dev
-        sudo apt-get install -y libsqlite3-dev libgdbm-dev libdb5.3-dev libbz2-dev
-        sudo apt-get install -y libexpat1-dev liblzma-dev zlib1g-dev cython3
-        sudo apt-get install -y autoconf automake libtool pkg-config cmake
-        # 增加依赖：expect，用于自动化交互式对话
-        sudo apt-get install -y expect
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip openjdk-17-jdk python3-pip \
+            python3-dev build-essential libffi-dev libssl-dev \
+            libncurses5-dev libncursesw5-dev libreadline-dev \
+            libsqlite3-dev libgdbm-dev libdb5.3-dev libbz2-dev \
+            libexpat1-dev liblzma-dev zlib1g-dev cython3 \
+            autoconf automake libtool pkg-config cmake \
+            expect wget
 
-    - name: Install Buildozer
-      run: |
-        pip3 install --upgrade pip
-        pip3 install --user buildozer
-        echo "/home/runner/.local/bin" >> $GITHUB_PATH
+      - name: Install Buildozer
+        run: |
+          pip3 install --upgrade pip
+          pip3 install --user buildozer
+          echo "/home/runner/.local/bin" >> $GITHUB_PATH
 
-    - name: Configure Buildozer (关键步骤)
-      run: |
-        echo "=== 阶段 1: 强制初始化 ==="
-        rm -f buildozer.spec
-        buildozer init -y
-        echo "✅ buildozer.spec 已生成"
-        
-        echo "=== 阶段 2: 配置Spec文件 ==="
-        # 使用sed确保准确修改，避免重复追加
-        sed -i "s|^title = .*|title = 黄金监控|g" buildozer.spec
-        sed -i "s|^package.name = .*|package.name = goldmonitor|g" buildozer.spec
-        sed -i "s|^package.domain = .*|package.domain = org.test|g" buildozer.spec
-        sed -i "s|^source.dir = .*|source.dir = .|g" buildozer.spec
-        sed -i "s|^source.main = .*|source.main = main19.py|g" buildozer.spec
-        sed -i "s|^source.include_exts = .*|source.include_exts = py,png,jpg,kv,atlas,ttc,ttf|g" buildozer.spec
-        sed -i "s|^requirements = .*|requirements = python3,kivy,kivymd,requests|g" buildozer.spec
-        # ！！！ 核心修复：将SDK版本锁定为33，与我们手动安装的一致 ！！！
-        sed -i "s|^android.api = .*|android.api = 33|g" buildozer.spec
-        sed -i "s|^android.minapi = .*|android.minapi = 21|g" buildozer.spec
-        sed -i "s|^android.sdk = .*|android.sdk = 33|g" buildozer.spec
-        sed -i "s|^android.ndk = .*|android.ndk = 25.1.8937393|g" buildozer.spec
-        sed -i "s|^android.permissions = .*|android.permissions = INTERNET,VIBRATE|g" buildozer.spec
-        sed -i "s|^orientation = .*|orientation = portrait|g" buildozer.spec
-        
-        echo "=== 阶段 3: 验证配置 ==="
-        echo "当前工作目录:"
-        pwd
-        echo "生成的 spec 文件前20行:"
-        head -20 buildozer.spec
-        echo "✅ Configure Buildozer 步骤完成"
+      - name: Configure Buildozer
+        run: |
+          echo "=== 阶段 1: 强制初始化 ==="
+          rm -f buildozer.spec
+          buildozer init -y
+          
+          echo "=== 阶段 2: 逐行配置buildozer.spec ==="
+          
+          # 备份原始文件
+          cp buildozer.spec buildozer.spec.backup
+          
+          # 创建一个新的spec文件
+          {
+            # 复制原始文件直到Android配置部分
+            sed '/^\[app\]/,/^\[/p;d' buildozer.spec.backup | head -50
+            
+            echo ""
+            echo "# ===== Android配置（自定义）====="
+            echo ""
+            echo "# 应用信息"
+            echo "title = 黄金监控"
+            echo "package.name = goldmonitor"
+            echo "package.domain = org.test"
+            echo ""
+            echo "# 源代码"
+            echo "source.dir = ."
+            echo "source.main = main19.py"
+            echo "source.include_exts = py,png,jpg,kv,atlas,ttc,ttf"
+            echo ""
+            echo "# 依赖"
+            echo "requirements = python3,kivy,kivymd,requests"
+            echo ""
+            echo "# Android配置"
+            echo "android.api = 33"
+            echo "android.minapi = 21"
+            echo "android.sdk = 33"
+            echo "android.ndk = 25.1.8937393"
+            echo "# 注释掉默认的build-tools版本"
+            echo "# android.build_tools_version = "
+            echo "android.permissions = INTERNET,VIBRATE"
+            echo "orientation = portrait"
+            echo ""
+            
+            # 复制原始文件的其余部分
+            sed -n '/^\[buildozer\]/,$p' buildozer.spec.backup
+          } > buildozer.spec
+          
+          echo "=== 阶段 3: 验证配置 ==="
+          echo "配置完成，显示关键部分:"
+          echo "------------------------"
+          grep -E "^(title|package\.|source\.|requirements|android\.|orientation)" buildozer.spec
+          echo "------------------------"
+          echo "✅ buildozer.spec 配置完成"
 
-    # --- 核心修复：使用 expect 脚本100%自动接受SDK许可证 ---
-    - name: Accept Android SDK Licenses with Expect
-      run: |
-        echo "=== 开始使用 Expect 自动处理SDK许可证 ==="
-        # 设置Android SDK路径 (Buildozer 使用的位置)
-        export ANDROID_HOME="/home/runner/.buildozer/android/platform/android-sdk"
-        export ANDROID_SDK_ROOT="$ANDROID_HOME"
-        echo "SDK路径设置为: $ANDROID_HOME"
-        
-        # 创建 expect 脚本文件（避免YAML多行文本嵌套问题）
-        echo "创建 expect 脚本文件..."
-        cat << 'EOF' > /tmp/accept_licenses.exp
-#!/usr/bin/expect -f
-set timeout 60
-spawn $env(ANDROID_HOME)/tools/bin/sdkmanager --licenses
-expect {
-    "Accept? (y/N):" { 
-        send "y\r"
-        exp_continue
-    }
-    timeout {
-        send_user "超时\n"
-        exit 1
-    }
-    eof
-}
-send_user "许可证接受流程完成\n"
-EOF
-        
-        chmod +x /tmp/accept_licenses.exp
-        echo "✅ Expect 脚本文件创建完成"
-        
-        # 运行 expect 脚本
-        echo "运行 Expect 脚本..."
-        /usr/bin/expect /tmp/accept_licenses.exp
-        
-        echo "✅ Expect 脚本执行完毕"
-        
-        # 方法2：使用非交互式方式安装组件（避免yes命令问题）
-        echo "开始安装 Android SDK 组件..."
-        # 创建响应文件来避免交互
-        mkdir -p "$ANDROID_HOME/licenses"
-        echo -e "8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n" > "$ANDROID_HOME/licenses/android-sdk-license"
-        echo -e "84831b9409646a918e30573bab4c9c91346d8abd\n" > "$ANDROID_HOME/licenses/android-sdk-preview-license"
-        
-        # 使用sdkmanager的非交互模式
-        $ANDROID_HOME/tools/bin/sdkmanager --install "platforms;android-33" "build-tools;33.0.2" "platform-tools" --sdk_root="$ANDROID_HOME" 2>&1 | grep -v "Warning:"
-        
-        echo "✅ Android SDK 平台和构建工具安装尝试完成"
+      # --- 安装Android SDK命令行工具 ---
+      - name: Install Android SDK Command Line Tools
+        run: |
+          echo "=== 安装Android SDK命令行工具 ==="
+          
+          SDK_DIR="/home/runner/android-sdk"
+          mkdir -p "$SDK_DIR"
+          
+          cd /tmp
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q commandlinetools-linux-*.zip
+          
+          mkdir -p "$SDK_DIR/cmdline-tools/latest"
+          mv cmdline-tools/* "$SDK_DIR/cmdline-tools/latest/"
+          
+          echo "ANDROID_HOME=$SDK_DIR" >> $GITHUB_ENV
+          echo "ANDROID_SDK_ROOT=$SDK_DIR" >> $GITHUB_ENV
+          echo "PATH=$SDK_DIR/cmdline-tools/latest/bin:$PATH" >> $GITHUB_ENV
+          
+          echo "✅ Android SDK命令行工具安装完成"
+          echo "SDK路径: $SDK_DIR"
 
-    - name: Build APK
-      timeout-minutes: 90
-      run: |
-        echo "=== 开始最终 APK 构建 ==="
-        # 构建前再次确认环境
-        echo "当前目录内容:"
-        ls -la
-        echo "开始执行 buildozer android debug..."
-        buildozer -v android debug
+      - name: Prepare Android SDK Licenses
+        run: |
+          echo "=== 准备Android SDK许可证 ==="
+          SDK_PATH="$ANDROID_HOME"
+          mkdir -p "$SDK_PATH/licenses"
+          
+          # 写入完整的许可证文件
+          echo -e "8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e" > "$SDK_PATH/licenses/android-sdk-license"
+          echo -e "84831b9409646a918e30573bab4c9c91346d8abd" > "$SDK_PATH/licenses/android-sdk-preview-license"
+          echo "601085b94cd77f0b54ff86406957099ebe79c4d6" > "$SDK_PATH/licenses/android-googletv-license"
+          echo "33b6a2b64607f11b759f320ef9dff4ae5c47d97a" > "$SDK_PATH/licenses/android-sdk-arm-dbt-license"
+          echo "e9acab5b5fbb560a72cfaecce8946896ff6aab9d" > "$SDK_PATH/licenses/google-gdk-license"
+          
+          echo "✅ 许可证文件已创建"
 
-    - name: Upload APK artifact
-      if: success()
-      uses: actions/upload-artifact@v4
-      with:
-        name: gold-monitor-apk
-        path: bin/*.apk
-        retention-days: 7
+      - name: Install Android SDK Components
+        run: |
+          echo "=== 安装Android SDK组件 ==="
+          SDK_PATH="$ANDROID_HOME"
+          
+          # 接受许可证
+          echo "y" | $SDK_PATH/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          
+          # 安装Buildozer需要的版本和我们配置的版本
+          echo "安装Android SDK组件..."
+          $SDK_PATH/cmdline-tools/latest/bin/sdkmanager --install \
+            "platforms;android-33" \
+            "build-tools;36.1.0" \
+            "build-tools;33.0.2" \
+            "platform-tools" \
+            "cmdline-tools;latest"
+          
+          echo "✅ Android SDK组件安装完成"
+
+      # --- 关键步骤：将SDK复制到Buildozer目录 ---
+      - name: Copy Android SDK to Buildozer Directory
+        run: |
+          echo "=== 将Android SDK复制到Buildozer目录 ==="
+          
+          # Buildozer期望的路径
+          BUILDOZER_SDK_DIR="/home/runner/.buildozer/android/platform/android-sdk"
+          
+          # 我们安装的SDK路径
+          OUR_SDK_DIR="$ANDROID_HOME"
+          
+          echo "源路径: $OUR_SDK_DIR"
+          echo "目标路径: $BUILDOZER_SDK_DIR"
+          
+          # 确保目标目录存在
+          mkdir -p "$(dirname "$BUILDOZER_SDK_DIR")"
+          
+          # 如果已存在，先删除
+          rm -rf "$BUILDOZER_SDK_DIR"
+          
+          # 复制整个SDK目录
+          cp -r "$OUR_SDK_DIR" "$BUILDOZER_SDK_DIR"
+          
+          # 验证复制结果
+          echo "验证SDK目录内容:"
+          ls -la "$BUILDOZER_SDK_DIR/build-tools/" 2>/dev/null | head -5 || echo "build-tools目录尚未创建"
+          
+          echo "✅ Android SDK已复制到Buildozer目录"
+
+      # --- 修改后的 Build APK 步骤（带详细调试）---
+      - name: Build APK (带详细调试)
+        timeout-minutes: 120
+        env:
+          ANDROID_HOME: "/home/runner/.buildozer/android/platform/android-sdk"
+          ANDROID_SDK_ROOT: "/home/runner/.buildozer/android/platform/android-sdk"
+        run: |
+          echo "=== 开始构建APK（详细模式）==="
+          
+          # 1. 构建前环境检查
+          echo "1. 环境检查:"
+          echo "   当前目录: $(pwd)"
+          echo "   目录内容:"
+          ls -la
+          echo ""
+          echo "   buildozer.spec 是否存在:"
+          ls -la buildozer.spec 2>/dev/null || echo "   ❌ 不存在"
+          echo ""
+          echo "   主文件 main19.py 是否存在:"
+          ls -la main19.py 2>/dev/null || echo "   ❌ 不存在"
+          
+          # 2. 显示buildozer配置
+          echo "2. buildozer.spec 关键配置:"
+          grep -E "^(title|package\.|source\.|requirements|android\.)" buildozer.spec || echo "   无法读取配置"
+          
+          # 3. 检查Android SDK
+          echo "3. Android SDK 检查:"
+          echo "   ANDROID_HOME: $ANDROID_HOME"
+          ls -la "$ANDROID_HOME/build-tools/" 2>/dev/null | head -5 || echo "   ❌ build-tools目录不存在"
+          
+          # 4. 运行buildozer并捕获所有输出
+          echo "4. 开始执行 buildozer..."
+          echo "================================"
+          
+          # 保存输出到文件以便分析
+          buildozer -v android debug 2>&1 | tee buildozer_output.log
+          BUILD_STATUS=${PIPESTATUS[0]}
+          
+          echo "================================"
+          echo "5. 构建完成，退出码: $BUILD_STATUS"
+          
+          # 6. 检查输出文件
+          echo "6. 检查输出文件:"
+          ls -la bin/ 2>/dev/null || echo "   bin目录不存在"
+          find . -name "*.apk" 2>/dev/null | head -5 || echo "   未找到.apk文件"
+          
+          # 7. 显示buildozer日志的最后部分
+          echo "7. buildozer输出最后50行:"
+          tail -50 buildozer_output.log 2>/dev/null || echo "   无日志文件"
+          
+          # 8. 如果有错误，显示错误部分
+          if [ $BUILD_STATUS -ne 0 ]; then
+            echo "8. 构建失败，错误信息:"
+            grep -A 5 -B 5 -i "error\|fail\|exception\|traceback" buildozer_output.log 2>/dev/null | head -30 || echo "   未找到明显错误信息"
+          fi
+          
+          # 9. 根据退出码决定是否失败
+          if [ $BUILD_STATUS -ne 0 ]; then
+            echo "❌ buildozer构建失败，退出码: $BUILD_STATUS"
+            exit $BUILD_STATUS
+          else
+            echo "✅ buildozer命令执行完成"
+          fi
+
+      - name: Upload APK artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gold-monitor-apk
+          path: bin/*.apk
+          retention-days: 7
