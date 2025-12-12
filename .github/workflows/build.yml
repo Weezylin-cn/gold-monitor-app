@@ -39,48 +39,45 @@ jobs:
           rm -f buildozer.spec
           buildozer init -y
           
-          echo "=== 阶段 2: 清理并重建spec文件 ==="
+          echo "=== 阶段 2: 逐行创建spec文件 ==="
           
-          # 方法：完全重新创建spec文件，而不是追加
-          # 1. 先获取原始spec的基本结构
-          echo "创建新的buildozer.spec文件..."
+          # 完全删除旧文件，逐行创建新文件
+          rm -f buildozer.spec
           
-          # 创建全新的spec文件
-          cat > buildozer.spec << 'EOF'
-[app]
-
-# ===== 应用信息 =====
-title = 黄金监控
-package.name = goldmonitor
-package.domain = org.test
-
-# ===== 源代码配置 =====
-source.dir = .
-source.main = main19.py
-source.include_exts = py,png,jpg,kv,atlas,ttc,ttf
-
-# ===== 需求/依赖 =====
-requirements = python3,kivy,kivymd,requests
-
-# ===== Android配置 =====
-android.api = 33
-android.minapi = 21
-android.sdk = 33
-android.ndk = 25.1.8937393
-android.permissions = INTERNET,VIBRATE
-orientation = portrait
-
-[buildozer]
-
-# ===== Buildozer配置 =====
-log_level = 2
-warn_on_root = 1
-EOF
+          # 使用echo逐行创建，避免多行文本语法问题
+          echo "[app]" >> buildozer.spec
+          echo "" >> buildozer.spec
+          echo "# ===== 应用信息 =====" >> buildozer.spec
+          echo "title = 黄金监控" >> buildozer.spec
+          echo "package.name = goldmonitor" >> buildozer.spec
+          echo "package.domain = org.test" >> buildozer.spec
+          echo "" >> buildozer.spec
+          echo "# ===== 源代码配置 =====" >> buildozer.spec
+          echo "source.dir = ." >> buildozer.spec
+          echo "source.main = main19.py" >> buildozer.spec
+          echo "source.include_exts = py,png,jpg,kv,atlas,ttc,ttf" >> buildozer.spec
+          echo "" >> buildozer.spec
+          echo "# ===== 需求/依赖 =====" >> buildozer.spec
+          echo "requirements = python3,kivy,kivymd,requests" >> buildozer.spec
+          echo "" >> buildozer.spec
+          echo "# ===== Android配置 =====" >> buildozer.spec
+          echo "android.api = 33" >> buildozer.spec
+          echo "android.minapi = 21" >> buildozer.spec
+          echo "android.sdk = 33" >> buildozer.spec
+          echo "android.ndk = 25.1.8937393" >> buildozer.spec
+          echo "android.permissions = INTERNET,VIBRATE" >> buildozer.spec
+          echo "orientation = portrait" >> buildozer.spec
+          echo "" >> buildozer.spec
+          echo "[buildozer]" >> buildozer.spec
+          echo "" >> buildozer.spec
+          echo "# ===== Buildozer配置 =====" >> buildozer.spec
+          echo "log_level = 2" >> buildozer.spec
+          echo "warn_on_root = 1" >> buildozer.spec
           
           echo "=== 阶段 3: 验证配置 ==="
-          echo "新创建的buildozer.spec文件:"
+          echo "新创建的buildozer.spec文件前30行:"
           echo "------------------------"
-          cat buildozer.spec
+          head -30 buildozer.spec
           echo "------------------------"
           echo "检查是否有重复项:"
           # 检查每个选项是否只出现一次
