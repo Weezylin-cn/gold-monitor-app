@@ -1,0 +1,32 @@
+name: Diagnose Workflow Issues
+
+on: [workflow_dispatch]  # 手动触发
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check current workflow files
+        run: |
+          echo "=== 检查当前工作流文件 ==="
+          echo "工作流目录:"
+          ls -la .github/workflows/
+          echo ""
+          echo "build.yml 文件内容前20行:"
+          head -20 .github/workflows/build.yml
+          echo ""
+          echo "文件大小:"
+          wc -l .github/workflows/build.yml
+          echo ""
+          echo "文件编码:"
+          file .github/workflows/build.yml
+          echo ""
+          echo "是否有BOM头:"
+          head -c 3 .github/workflows/build.yml | od -An -tx1 | grep -q "ef bb bf" && echo "有BOM头" || echo "无BOM头"
+      
+      - name: Simple test step
+        run: |
+          echo "这是一个简单的测试步骤"
+          echo "当前时间: $(date)"
+          echo "工作目录: $(pwd)"
