@@ -180,10 +180,12 @@ jobs:
 
       # --- Build APK 步骤（带详细调试）---
       - name: Build APK (带详细调试)
-        timeout-minutes: 120
+        timeout-minutes: 180  # 增加到180分钟
         env:
           ANDROID_HOME: "/home/runner/.buildozer/android/platform/android-sdk"
           ANDROID_SDK_ROOT: "/home/runner/.buildozer/android/platform/android-sdk"
+          # 添加构建优化环境变量
+          BUILD_OZER_ARGS: "--color=always"
         run: |
           echo "=== 开始构建APK（详细模式）==="
           
@@ -212,12 +214,29 @@ jobs:
           echo "4. 开始执行 buildozer..."
           echo "================================"
           
-          # 保存输出到文件以便分析
-          buildozer -v android debug 2>&1 | tee buildozer_output.log
-          BUILD_STATUS=${PIPESTATUS[0]}
+          # 尝试多次构建（如果NDK下载失败会自动重试）
+          MAX_RETRIES=3
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "尝试第 $i/$MAX_RETRIES 次构建..."
+            
+            # 保存输出到文件以便分析
+            buildozer -v android debug 2>&1 | tee buildozer_output.log
+            BUILD_STATUS=${PIPESTATUS[0]}
+            
+            if [ $BUILD_STATUS -eq 0 ]; then
+              echo "✅ 构建成功！"
+              break
+            elif grep -q "read of closed file\|ValueError" buildozer_output.log; then
+              echo "⚠️ NDK下载中断，等待30秒后重试..."
+              sleep 30
+            else
+              echo "❌ 其他错误，不再重试"
+              break
+            fi
+          done
           
           echo "================================"
-          echo "5. 构建完成，退出码: $BUILD_STATUS"
+          echo "5. 最终构建完成，退出码: $BUILD_STATUS"
           
           # 6. 检查输出文件
           echo "6. 检查输出文件:"
@@ -231,7 +250,7 @@ jobs:
           # 8. 如果有错误，显示错误部分
           if [ $BUILD_STATUS -ne 0 ]; then
             echo "8. 构建失败，错误信息:"
-            grep -A 5 -B 5 -i "error\|fail\|exception\|traceback" buildozer_output.log 2>/dev/null | head -30 || echo "   未找到明显错误信息"
+            grep -A 5 -B 5 -i "error\|fail\|exception\|traceback\|closed" buildozer_output.log 2>/dev/null | head -30 || echo "   未找到明显错误信息"
           fi
           
           # 9. 根据退出码决定是否失败
